@@ -1,0 +1,35 @@
+name: CLI CD
+on:
+  push:
+    branches: [trunk]
+permissions:
+  contents: read
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+  ship:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: 打包命令行工具
+        run: tar czf "$RUNNER_TEMP/text-metrics.tgz" src test package.json README.md
+      - name: 发布当前提交
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="cli-$GITHUB_SHA"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --target "$GITHUB_SHA" --title "文本统计 ${GITHUB_SHA:0:7}" --notes "解压后用 Node.js 24 运行 src/cli.mjs。"
+          fi
+          if [[ "$(gh release view "$tag" --json isDraft --jq .isDraft)" == "true" ]]; then
+            gh release upload "$tag" "$RUNNER_TEMP/text-metrics.tgz" --clobber
+            gh release edit "$tag" --draft=false
+          fi
+          gh release view "$tag" --json assets,isDraft --jq 'select(.isDraft == false) | .assets[] | select(.name == "text-metrics.tgz" and .size > 0) | .url' | grep -q .

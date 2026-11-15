@@ -1,0 +1,10 @@
+{
+  "name": "autoloop-cli-sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "离线文本统计命令行工具与通用工作流验收仓库",
+  "bin": { "text-metrics": "src/cli.mjs" },
+  "scripts": { "test": "node --test", "check": "node --check src/cli.mjs && node --test" },
+  "engines": { "node": ">=24" }
+}

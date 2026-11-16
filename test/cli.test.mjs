@@ -59,6 +59,8 @@ test('帮助不读取标准输入并说明字段选项', () => {
   assert.equal(result.status, 0);
   assert.equal(result.stderr, '');
   assert.match(result.stdout, /用法/);
+  assert.match(result.stdout, /文件和标准输入必须为合法 UTF-8/);
+  assert.match(result.stdout, /非法编码时标准输出为空，标准错误输出中文错误，退出码为 1/);
   assert.match(result.stdout, /--field <lines\|words\|characters\|bytes>/);
   assert.match(result.stdout, /数值及换行/);
   assert.match(result.stdout, /--json/);
@@ -285,6 +287,58 @@ test('-- 不放宽字段值、重复选项、多路径或读取失败的错误�
     assert.equal(result.status, 1, context);
     assert.equal(result.stdout, '', context);
     assert.match(result.stderr, /^错误：/, context);
+  }
+});
+
+test('文件和标准输入的非法 UTF-8 在所有输出模式下均返回中文错误且无标准输出', () => {
+  const folder = mkdtempSync(path.join(tmpdir(), 'text-metrics-invalid-utf8-'));
+  const file = path.join(folder, '非法编码.txt');
+  const cases = [
+    ['非法字节', [0xff]],
+    ['截断的多字节序列', [0xe4, 0xb8]],
+    ['孤立的续字节', [0x80]],
+    ['过长编码', [0xc0, 0xaf]],
+    ['代理码点', [0xed, 0xa0, 0x80]],
+    ['超出 Unicode 范围', [0xf4, 0x90, 0x80, 0x80]],
+    ['合法前缀后的非法字节', [0x61, 0xff]],
+  ];
+  for (const [name, bytes] of cases) {
+    const input = Buffer.from(bytes);
+    writeFileSync(file, input);
+    for (const [options] of terminatorOutputs({ lines: 0, words: 0, characters: 0, bytes: 0 })) {
+      for (const source of ['省略路径', '标准输入', '文件']) {
+        const args = source === '省略路径' ? options : [...options, source === '文件' ? file : '-'];
+        const result = cli(args, source === '文件' ? '不应读取标准输入' : input);
+        const context = JSON.stringify({ name, source, options });
+        assert.equal(result.status, 1, context);
+        assert.equal(result.stdout, '', context);
+        assert.equal(result.stderr, '错误：输入包含非法 UTF-8 编码。\n', context);
+      }
+    }
+  }
+});
+
+test('UTF-8 校验保留文件和标准输入的中文、表情、CRLF、空输入及 BOM 计数语义', () => {
+  const folder = mkdtempSync(path.join(tmpdir(), 'text-metrics-valid-utf8-'));
+  const file = path.join(folder, '合法编码.txt');
+  const cases = [
+    ...terminatorCases,
+    ['\uFEFFa', { lines: 1, words: 1, characters: 2, bytes: 4 }],
+    ['\uFFFD', { lines: 1, words: 1, characters: 1, bytes: 3 }],
+  ];
+  for (const [input, metrics] of cases) {
+    const bytes = Buffer.from(input, 'utf8');
+    writeFileSync(file, bytes);
+    for (const [options, expected] of terminatorOutputs(metrics)) {
+      for (const source of ['省略路径', '标准输入', '文件']) {
+        const args = source === '省略路径' ? options : [...options, source === '文件' ? file : '-'];
+        const result = cli(args, source === '文件' ? Buffer.from([0xff]) : bytes);
+        const context = JSON.stringify({ input, source, options });
+        assert.equal(result.status, 0, context);
+        assert.equal(result.stderr, '', context);
+        assert.equal(result.stdout, expected, context);
+      }
+    }
   }
 });
 

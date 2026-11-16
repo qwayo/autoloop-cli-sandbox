@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -337,6 +337,30 @@ test('UTF-8 校验保留文件和标准输入的中文、表情、CRLF、空输�
         assert.equal(result.status, 0, context);
         assert.equal(result.stderr, '', context);
         assert.equal(result.stdout, expected, context);
+      }
+    }
+  }
+});
+
+test('目录路径在所有输出模式及路径位置下均返回明确中文提示', () => {
+  const folder = mkdtempSync(path.join(tmpdir(), 'text-metrics-directory-'));
+  for (const name of ['输入目录 sample', '-输入目录']) {
+    mkdirSync(path.join(folder, name));
+    const paths = name.startsWith('-') ? [path.join(folder, name)] : [name, path.join(folder, name)];
+    for (const [options] of terminatorOutputs({ lines: 0, words: 0, characters: 0, bytes: 0 })) {
+      const cases = [
+        ...paths.flatMap(file => [
+          { args: [...options, file], file },
+          { args: [file, ...options], file },
+        ]),
+        { args: [...options, '--', name], file: name },
+      ];
+      for (const { args, file } of cases) {
+        const result = cli(args, '不能用于替代目录的标准输入', folder);
+        const context = JSON.stringify(args);
+        assert.equal(result.status, 1, context);
+        assert.equal(result.stdout, '', context);
+        assert.equal(result.stderr, `错误：输入路径是目录：${file}。请指定文件。\n`, context);
       }
     }
   }

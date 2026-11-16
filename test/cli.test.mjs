@@ -342,6 +342,24 @@ test('UTF-8 校验保留文件和标准输入的中文、表情、CRLF、空输�
   }
 });
 
+test('缺失文件在所有输出模式及路径位置下均返回明确中文提示', () => {
+  const folder = mkdtempSync(path.join(tmpdir(), 'text-metrics-missing-'));
+  const file = '不存在的文件 sample.txt';
+  for (const [options] of terminatorOutputs({ lines: 0, words: 0, characters: 0, bytes: 0 })) {
+    for (const args of [
+      [...options, file],
+      [file, ...options],
+      [...options, '--', file],
+    ]) {
+      const result = cli(args, '不能用于替代文件的标准输入', folder);
+      const context = JSON.stringify(args);
+      assert.equal(result.status, 1, context);
+      assert.equal(result.stdout, '', context);
+      assert.equal(result.stderr, `错误：文件不存在：${file}。\n`, context);
+    }
+  }
+});
+
 test('参数错误和读文件失败返回非零退出码', () => {
   for (const args of [
     ['--unknown'],

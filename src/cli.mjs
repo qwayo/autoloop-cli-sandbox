@@ -41,7 +41,15 @@ function main(args) {
       file = arg;
     }
   }
-  const input = readFileSync(file === undefined || file === '-' ? 0 : file);
+  let input;
+  try {
+    input = readFileSync(file === undefined || file === '-' ? 0 : file);
+  } catch (error) {
+    if (file !== undefined && file !== '-' && error.code === 'ENOENT') {
+      throw new Error(`文件不存在：${file}。`);
+    }
+    throw error;
+  }
   if (!isUtf8(input)) {
     throw new Error('输入包含非法 UTF-8 编码。');
   }

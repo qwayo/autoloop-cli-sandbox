@@ -45,8 +45,13 @@ function main(args) {
   try {
     input = readFileSync(file === undefined || file === '-' ? 0 : file);
   } catch (error) {
-    if (file !== undefined && file !== '-' && error.code === 'ENOENT') {
-      throw new Error(`文件不存在：${file}。`);
+    if (file !== undefined && file !== '-') {
+      if (error.code === 'ENOENT') {
+        throw new Error(`文件不存在：${file}。`);
+      }
+      if (error.code === 'EISDIR') {
+        throw new Error(`输入路径是目录：${file}。请指定文件。`);
+      }
     }
     throw error;
   }
